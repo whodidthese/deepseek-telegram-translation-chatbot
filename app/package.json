@@ -1,0 +1,27 @@
+{
+	"name": "deepseek-telegram-translation-chatbot",
+	"version": "1.0.0",
+	"description": "Telegram bot using DeepSeek AI for prompt and commit message translation.",
+	"main": "bot.js",
+	"scripts": {
+	  "start": "node bot.js",
+	  "test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Who Did These <whodidthese@talkingsource.com>",
+	"license": "ISC",
+	"repository": {
+	  "type": "git",
+	  "url": "git+https://github.com/whodidthese/deepseek-telegram-translation-chatbot.git"
+	},
+	"bugs": {
+	  "url": "https://github.com/whodidthese/deepseek-telegram-translation-chatbot/issues"
+	},
+	"homepage": "https://github.com/whodidthese/deepseek-telegram-translation-chatbot#readme",
+	"dependencies": {
+	  "dotenv": "^16.4.5",
+	  "node-telegram-bot-api": "^0.65.1"
+	},
+	"engines": {
+	  "node": ">=18.0.0"
+	}
+  }
