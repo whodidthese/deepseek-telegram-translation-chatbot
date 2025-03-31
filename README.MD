@@ -100,4 +100,4 @@ A personal Telegram bot built with Node.js that utilizes the DeepSeek AI model (
 
 ## License
 
-This project is licensed under the ISC License. See the `package.json` file for details.
+This project is licensed under the ISC License - see the LICENSE file for details.
