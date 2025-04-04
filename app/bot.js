@@ -65,6 +65,7 @@ const sendMessage = (chatId, text) => {
 const callDeepSeekAPI = async (inputText, mode) => {
 	let systemPrompt = "";
 	let userPrompt = inputText;
+	let modPrefix = "Translate the following prompt into English\n--- --- ---\n";
 
 	// Trim input just in case
 	userPrompt = userPrompt.trim();
@@ -78,6 +79,8 @@ const callDeepSeekAPI = async (inputText, mode) => {
 		systemPrompt = `You are an AI assistant specialized in refining text for AI prompts. Translate the user's input into clear, concise, and unambiguous English suitable for prompting another AI. Respond *only* with the translated text and absolutely nothing else. Do not add any introductory phrases, explanations, or conversational filler.`;
 	} else if (mode === 'commit') {
 		systemPrompt = `You are an AI assistant specialized in formatting text into git commit messages. Translate the user's input into a clear and concise English git commit message following conventional standards (e.g., 'feat: add user authentication'). Respond *only* in the format \`git commit -m "COMMIT_CONTENT"\`. If you can think of 1 or 2 significantly better alternative phrasings for the commit message, provide them on new lines, each prefixed with 'Alternative:'. Do not add any other introductory text, explanations, or conversation.`;
+
+		modPrefix = "Translate the following commit message into English\n--- --- ---\n";
 	} else {
 		console.error("Invalid mode provided to callDeepSeekAPI:", mode);
 		return "Internal error: Invalid processing mode."; // Inform user of internal issue
@@ -85,7 +88,7 @@ const callDeepSeekAPI = async (inputText, mode) => {
 
 	const messages = [
 		{ role: "system", content: systemPrompt },
-		{ role: "user", content: userPrompt }
+		{ role: "user", content: modPrefix + userPrompt }
 	];
 
 	console.log(`Calling DeepSeek API in ${mode} mode for user ${authorizedUserId}`);
