@@ -231,7 +231,10 @@ bot.on('message', async (msg) => {
 	if (msg.text === '/help' || msg.text === '/prompt_mode' || msg.text === '/commit_mode') {
 		// This message should have been caught by bot.onText.
 		// Log potentially unexpected flow, but don't process as text.
-		console.warn(`Message "${msg.text}" reached general handler unexpectedly.`);
+		const expMessage = `Message "${msg.text}" reached general handler unexpectedly.`;
+		console.warn(expMessage);
+
+		bot.sendMessage(chatId, expMessage);
 		return;
 	}
 
