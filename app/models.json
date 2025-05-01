@@ -1,0 +1,22 @@
+[
+  {
+    "id": "deepseek/deepseek-chat-v3-0324:free",
+    "name": "DeepSeek V3 0324",
+    "notes": "Default & Free"
+  },
+  {
+    "id": "qwen/qwen3-235b-a22b:free",
+    "name": "Qwen3 235B A22B",
+    "notes": "Free"
+  },
+  {
+    "id": "qwen/qwen3-8b:free",
+    "name": "Qwen3 8B",
+    "notes": "Free"
+  },
+  {
+    "id": "google/gemini-2.0-flash-exp:free",
+    "name": "Gemini 2.0 Flash Experimental",
+    "notes": "Free"
+  }
+] 

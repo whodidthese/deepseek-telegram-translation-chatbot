@@ -1,6 +1,6 @@
 {
 	"name": "deepseek-telegram-translation-chatbot",
-	"version": "1.0.5",
+	"version": "1.0.7",
 	"description": "Telegram bot using DeepSeek AI for prompt and commit message translation.",
 	"main": "bot.js",
 	"scripts": {

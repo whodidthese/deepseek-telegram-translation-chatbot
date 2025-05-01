@@ -9,12 +9,17 @@ A personal Telegram bot built with Node.js that utilizes the DeepSeek AI model (
 * **Two Operating Modes:**
     * **Prompt Translation Mode:** Translates any input text into clear, concise English suitable for use in AI prompts.
     * **Commit Translation Mode:** Translates any input text into a standard English Git commit message format (`git commit -m "..."`), potentially suggesting alternatives.
+    * **Chat Mode:** Engages in general conversation using the selected AI model.
 * **Single User Authorization:** Only responds to messages and commands from the user ID specified in the configuration.
+* **Model Selection:** Allows switching between different AI models defined in `models.json` via commands.
 * **Command Control:**
     * `/start`: Checks if the user is authorized.
-    * `/help`: Displays available commands and the current operating mode.
+    * `/help`: Displays available commands, the current operating mode, and the current model.
     * `/prompt_mode`: Switches the bot to Prompt Translation Mode.
     * `/commit_mode`: Switches the bot to Commit Translation Mode.
+    * `/chat_mode`: Switches the bot to General Chat Mode.
+    * `/list_models`: Shows the list of available AI models defined in `models.json` and indicates the currently active one.
+    * `/set_model <model_id>`: Switches the active AI model to the specified ID (must be one of the IDs listed by `/list_models`).
 * **Robust Command Handling:** Commands must be at the beginning of the message and (except for `/start`) must not have trailing text to be recognized as commands. Other text, including invalid command formats, is treated as input for translation.
 * **DeepSeek Integration:** Leverages the DeepSeek language model for translation tasks via an API endpoint.
 
@@ -72,10 +77,29 @@ A personal Telegram bot built with Node.js that utilizes the DeepSeek AI model (
     # DeepSeek API Endpoint (default uses OpenRouter)
     DEEPSEEK_API_ENDPOINT="[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)"
 
-    # DeepSeek Model ID (default uses OpenRouter free tier model)
+    # DeepSeek Model ID (This is the *default* model used on startup)
     DEEPSEEK_MODEL="deepseek/deepseek-chat-v3-0324:free"
     ```
     **Important:** Keep your `.env` file secure and **do not** commit it to version control. Ensure `.env` is listed in your `.gitignore` file.
+
+5.  **(Optional) Configure Models:**
+    Create a file named `models.json` in the project's root directory. Add the models you want to use in JSON format. Example:
+    ```json
+    [
+      {
+        "id": "deepseek/deepseek-chat-v3-0324:free",
+        "name": "DeepSeek V3 (Default)",
+        "notes": "The default model from .env"
+      },
+      {
+        "id": "qwen/qwen3-8b:free",
+        "name": "Qwen3 8B",
+        "notes": "Another free model"
+      }
+      // Add more models here
+    ]
+    ```
+    If `models.json` is not found or is invalid, the bot will only use the `DEEPSEEK_MODEL` from the `.env` file.
 
 ## Running the Bot
 
@@ -94,9 +118,9 @@ A personal Telegram bot built with Node.js that utilizes the DeepSeek AI model (
 
 1.  Open Telegram and find the chat with the bot you created.
 2.  Only the user whose Telegram ID matches `AUTHORIZED_USER_ID` can interact with the bot's features.
-3.  Use the commands `/help`, `/prompt_mode`, or `/commit_mode` to control the bot.
-4.  Send any text message to the bot. It will process the text based on the `currentMode` (Prompt or Commit Translation) and send back the result from the DeepSeek AI.
-5.  Messages from unauthorized users (except for a notice on `/start`) will be ignored. Invalid command formats (e.g., `/help me`) will be treated as text input for translation.
+3.  Use the commands `/help`, `/prompt_mode`, `/commit_mode`, `/chat_mode`, `/list_models`, or `/set_model <model_id>` to control the bot.
+4.  Send any text message to the bot. It will process the text based on the `currentMode` and `currentModelId` and send back the result from the AI.
+5.  Messages from unauthorized users (except for a notice on `/start`) will be ignored. Invalid command formats (e.g., `/help me`) will be treated as text input for translation (or chat).
 
 ## License
 

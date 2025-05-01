@@ -1,166 +1,85 @@
-// bot.js
 require('dotenv').config(); // Load environment variables from .env file
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
+const path = require('path');
+const { isAuthorized, sendMessage } = require('./utils'); // Import helpers
+const { callDeepSeekAPI } = require('./api'); // Import API caller
 
 // --- Configuration ---
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const authorizedUserId = parseInt(process.env.AUTHORIZED_USER_ID, 10); // Ensure it's a number
 const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
 const deepSeekApiEndpoint = process.env.DEEPSEEK_API_ENDPOINT;
-const deepSeekModel = process.env.DEEPSEEK_MODEL;
+const defaultModelId = process.env.DEEPSEEK_MODEL; // Default model from .env
 
 // Basic validation
-if (!token || !authorizedUserId || !deepSeekApiKey || !deepSeekApiEndpoint || !deepSeekModel) {
+if (!token || !authorizedUserId || !deepSeekApiKey || !deepSeekApiEndpoint || !defaultModelId) {
 	console.error("Error: Missing required environment variables. Check your .env file.");
 	process.exit(1); // Exit if essential config is missing
 }
 
 // --- Bot State ---
 let currentMode = 'prompt'; // Default mode on startup
+let availableModels = []; // To store models from models.json
+let currentModelId = defaultModelId; // Initialize with default from .env
+
+// --- Load Models ---
+const modelsFilePath = path.join(__dirname, 'models.json');
+try {
+    if (fs.existsSync(modelsFilePath)) {
+        const modelsFileContent = fs.readFileSync(modelsFilePath, 'utf-8');
+        availableModels = JSON.parse(modelsFileContent);
+        // Validate if the default model ID from .env exists in models.json
+        const defaultModelExists = availableModels.some(model => model.id === defaultModelId);
+        if (!defaultModelExists) {
+            console.warn(`Warning: Default model ID "${defaultModelId}" from .env not found in models.json. Using the first model from models.json instead.`);
+            if (availableModels.length > 0) {
+                currentModelId = availableModels[0].id;
+            } else {
+                console.error("Error: models.json is empty. Please add at least one model definition.");
+                process.exit(1);
+            }
+        }
+        console.log("Successfully loaded models from models.json.");
+    } else {
+        console.warn("Warning: models.json not found. Using only the default model from .env.");
+        // Add the default model from .env as the only available model
+        availableModels.push({ id: defaultModelId, name: `${defaultModelId} (Default from .env)`, notes: "" });
+    }
+} catch (error) {
+    console.error("Error reading or parsing models.json:", error);
+    console.warn("Falling back to using only the default model from .env.");
+    availableModels = [{ id: defaultModelId, name: `${defaultModelId} (Default from .env)`, notes: "" }];
+    currentModelId = defaultModelId; // Ensure currentModelId is set even on error
+}
+
 
 // --- Bot Initialization ---
 const bot = new TelegramBot(token, { polling: true });
 
 console.log(`Bot started. Authorized User ID: ${authorizedUserId}`);
 console.log(`Default mode: ${currentMode}`);
+console.log(`Current model ID: ${currentModelId}`);
 console.log(`Current time: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' })} (Taiwan Time)`);
 
 
-// --- Helper Functions ---
+// --- Helper Functions (Moved to utils.js and api.js) ---
+// isAuthorized is now imported from utils.js
+// sendMessage is now imported from utils.js
+// callDeepSeekAPI is now imported from api.js
 
-/**
- * Checks if the message sender is the authorized user.
- * @param {number} userId - The user ID from the Telegram message.
- * @returns {boolean} - True if authorized, false otherwise.
- */
-const isAuthorized = (userId) => {
-	return userId === authorizedUserId;
-};
-
-/**
- * Sends a message with common options.
- * @param {number} chatId - The chat ID to send the message to.
- * @param {string} text - The message text.
- */
-const sendMessage = (chatId, text) => {
-	// Basic check to prevent sending empty/null messages which can cause errors
-	if (typeof text !== 'string' || text.trim() === '') {
-		console.warn(`Attempted to send empty message to chat ID ${chatId}.`);
-		return;
-	}
-	bot.sendMessage(chatId, text, {
-		parse_mode: 'Markdown', // Optional: Use Markdown for formatting help text etc.
-		disable_web_page_preview: true
-	}).catch(error => {
-		console.error(`Error sending message to chat ID ${chatId}:`, error.message);
-	});
-};
-
-/**
- * Calls the DeepSeek API.
- * @param {string} inputText - The text input from the user.
- * @param {'prompt' | 'commit'} mode - The current operating mode.
- * @returns {Promise<string|null>} - The AI's response or null on error.
- */
-const callDeepSeekAPI = async (inputText, mode) => {
-	let systemPrompt = "";
-	let userPrompt = inputText;
-	let modPrefix = "Translate the following prompt into English\n--- --- ---\n";
-
-	// Trim input just in case
-	userPrompt = userPrompt.trim();
-	if (!userPrompt) {
-		console.log("Ignoring empty input string for DeepSeek API call.");
-		return "Input cannot be empty."; // Or return null, depending on desired behavior
-	}
-
-
-	if (mode === 'prompt') {
-		systemPrompt = `You are an AI assistant specialized in refining text for AI prompts. Translate the user's input into clear, concise, and unambiguous English suitable for prompting another AI. Respond *only* with the translated text and absolutely nothing else. Do not add any introductory phrases, explanations, or conversational filler.`;
-	} else if (mode === 'commit') {
-		systemPrompt = `You are an AI assistant specialized in formatting text into git commit messages. Translate the user's input into a clear and concise English git commit message following conventional standards (e.g., 'feat: add user authentication'). Respond *only* in the format \`git commit -m "COMMIT_CONTENT"\`. If you can think of 1 or 2 significantly better alternative phrasings for the commit message, provide them on new lines, each prefixed with 'Alternative:'. Do not add any other introductory text, explanations, or conversation.`;
-
-		modPrefix = "Translate the following commit message into English\n--- --- ---\n";
-	} else {
-		console.error("Invalid mode provided to callDeepSeekAPI:", mode);
-		return "Internal error: Invalid processing mode."; // Inform user of internal issue
-	}
-
-	const messages = [
-		{ role: "system", content: systemPrompt },
-		{ role: "user", content: modPrefix + userPrompt }
-	];
-
-	console.log(`Calling DeepSeek API in ${mode} mode for user ${authorizedUserId}`);
-	// console.log("Sending messages:", JSON.stringify(messages, null, 2)); // Uncomment for debugging prompts
-
-	try {
-		const response = await fetch(deepSeekApiEndpoint, {
-			method: "POST",
-			headers: {
-				"Authorization": `Bearer ${deepSeekApiKey}`,
-				"Content-Type": "application/json"
-			},
-			body: JSON.stringify({
-				"model": deepSeekModel,
-				"messages": messages,
-				// Optional parameters like temperature could be added here if needed
-				// "temperature": 0.7
-			})
-		});
-
-		if (!response.ok) {
-			const errorBody = await response.text();
-			console.error(`DeepSeek API Error: ${response.status} ${response.statusText}`, errorBody);
-			// Try to provide a more user-friendly message if possible, else generic
-			let friendlyError = `Sorry, I encountered an API error (${response.status}).`;
-			try {
-				const errorJson = JSON.parse(errorBody);
-				if (errorJson.error && errorJson.error.message) {
-					friendlyError += ` Details: ${errorJson.error.message}`;
-				}
-			} catch (e) {
-				// Ignore if errorBody is not JSON
-			}
-			return friendlyError;
-		}
-
-		const data = await response.json();
-
-		if (data.choices && data.choices.length > 0 && data.choices[0].message && typeof data.choices[0].message.content === 'string') {
-			console.log("DeepSeek API Response Received.");
-			// console.log("Raw response content:", data.choices[0].message.content); // Uncomment for debugging AI output
-			const content = data.choices[0].message.content.trim();
-			return content || "[Received empty response from AI]"; // Handle empty content string
-		} else {
-			console.error("DeepSeek API Error: Invalid response structure", JSON.stringify(data));
-			return "Sorry, I received an unexpected or empty response from the AI.";
-		}
-
-	} catch (error) {
-		console.error("Error calling DeepSeek API:", error);
-		// Check for specific FetchError types if needed (e.g., network issues)
-		if (error.name === 'AbortError') {
-			return "Sorry, the request to the AI timed out.";
-		}
-		return `Sorry, I encountered a network or processing error while contacting the AI. Details: ${error.message}`;
-	}
-};
 
 // --- Bot Event Handlers ---
 
-// /start command: Matches if the message *starts with* /start
-// Allows for potential deep linking parameters later, although not used now.
+// /start command
 bot.onText(/^\/start/, (msg) => {
 	const chatId = msg.chat.id;
 	const userId = msg.from.id;
 
-	if (isAuthorized(userId)) {
-		sendMessage(chatId, "You are authorized.");
+	if (isAuthorized(userId, authorizedUserId)) {
+		sendMessage(bot, chatId, "You are authorized.");
 	} else {
-		// Inform the unauthorized user, but don't provide functionality
-		// Use Markdown for formatting the ID
-		bot.sendMessage(chatId, `User ID \`${userId}\` is not authorized to use this bot.`, { parse_mode: 'Markdown', disable_web_page_preview: true });
+		bot.sendMessage(chatId, `User ID ${userId} is not authorized to use this bot.`); // Use plain text
 		console.log(`Unauthorized access attempt via /start by User ID: ${userId}`);
 	}
 });
@@ -168,40 +87,96 @@ bot.onText(/^\/start/, (msg) => {
 // /help command: Must exactly match '/help'
 bot.onText(/^\/help$/, (msg) => {
 	const chatId = msg.chat.id;
-	if (!isAuthorized(msg.from.id)) return; // Ignore unauthorized users silently for commands other than /start
+	// Check authorization using the imported function and pass authorizedUserId
+	if (!isAuthorized(msg.from.id, authorizedUserId)) return;
 
-	const helpText = `*Available Commands:*
+	const helpText = `Available Commands:
 /help - Show this help message.
-/prompt\\_mode - Switch to Prompt Translation Mode. Input will be translated into English suitable for AI prompts.
-/commit\\_mode - Switch to Commit Translation Mode. Input will be translated into a \`git commit -m "..."\` format, with possible alternatives.
+/prompt_mode - Switch to Prompt Translation Mode.
+/commit_mode - Switch to Commit Translation Mode.
+/chat_mode - Switch to General Chat Mode.
+/list_models - Show available AI models and the current one.
+/set_model <model_id> - Switch the AI model to use.
 
-*Current Mode:* \`${currentMode}\` (Mode: ${currentMode === 'prompt' ? 'Prompt Translation' : 'Commit Translation'})
+Current Mode: ${currentMode}
+Current Model: ${currentModelId}
 
-Simply send me any text message, and I will process it according to the current mode.
-I only respond to text messages and the exact commands listed above.`; // Added clarification
+Send any text message to process it with the current mode and model.`;
 
-	sendMessage(chatId, helpText);
+	sendMessage(bot, chatId, helpText); // Use imported sendMessage
 });
 
-// /prompt_mode command: Must exactly match '/prompt_mode'
+// /prompt_mode command
 bot.onText(/^\/prompt_mode$/, (msg) => {
 	const chatId = msg.chat.id;
-	if (!isAuthorized(msg.from.id)) return;
+	if (!isAuthorized(msg.from.id, authorizedUserId)) return;
 
 	currentMode = 'prompt';
 	console.log(`User ${msg.from.id} switched mode to: ${currentMode}`);
-	sendMessage(chatId, "Switched to Prompt Translation Mode.");
+	sendMessage(bot, chatId, "Switched to Prompt Translation Mode.");
 });
 
-// /commit_mode command: Must exactly match '/commit_mode'
+// /commit_mode command
 bot.onText(/^\/commit_mode$/, (msg) => {
 	const chatId = msg.chat.id;
-	if (!isAuthorized(msg.from.id)) return;
+	if (!isAuthorized(msg.from.id, authorizedUserId)) return;
 
 	currentMode = 'commit';
 	console.log(`User ${msg.from.id} switched mode to: ${currentMode}`);
-	sendMessage(chatId, "Switched to Commit Translation Mode.");
+	sendMessage(bot, chatId, "Switched to Commit Translation Mode.");
 });
+
+// /chat_mode command (New)
+bot.onText(/^\/chat_mode$/, (msg) => {
+	const chatId = msg.chat.id;
+	if (!isAuthorized(msg.from.id, authorizedUserId)) return;
+
+	currentMode = 'chat';
+	console.log(`User ${msg.from.id} switched mode to: ${currentMode}`);
+	sendMessage(bot, chatId, "Switched to General Chat Mode.");
+});
+
+
+// /list_models command (New)
+bot.onText(/^\/list_models$/, (msg) => {
+    const chatId = msg.chat.id;
+    if (!isAuthorized(msg.from.id, authorizedUserId)) return;
+
+    let modelListText = "Available Models:\n";
+    if (availableModels.length > 0) {
+        availableModels.forEach(model => {
+            const isCurrent = model.id === currentModelId ? " (Current)" : "";
+            modelListText += `- ${model.name || model.id}${isCurrent}\n  ID: ${model.id}\n`;
+            if(model.notes) {
+                modelListText += `  Notes: ${model.notes}\n`;
+            }
+        });
+    } else {
+        modelListText = "No models loaded. Please check models.json or the .env configuration.";
+    }
+    modelListText += `\nCurrent Model ID: ${currentModelId}`;
+
+    sendMessage(bot, chatId, modelListText);
+});
+
+// /set_model command (New)
+bot.onText(/^\/set_model (.+)$/, (msg, match) => {
+    const chatId = msg.chat.id;
+    if (!isAuthorized(msg.from.id, authorizedUserId)) return;
+
+    const requestedModelId = match[1].trim(); // Get the model ID from the command
+
+    const foundModel = availableModels.find(model => model.id === requestedModelId);
+
+    if (foundModel) {
+        currentModelId = foundModel.id;
+        console.log(`User ${msg.from.id} switched model to: ${currentModelId}`);
+        sendMessage(bot, chatId, `Switched model to: ${currentModelId}`);
+    } else {
+        sendMessage(bot, chatId, `Error: Model ID "${requestedModelId}" not found. Use /list_models to see available models.`);
+    }
+});
+
 
 // Handle regular text messages
 bot.on('message', async (msg) => {
@@ -209,87 +184,81 @@ bot.on('message', async (msg) => {
 	const userId = msg.from.id;
 
 	// 1. Check authorization FIRST
-	if (!isAuthorized(userId)) {
-		// We already handle unauthorized /start explicitly. Silently ignore other messages.
-		// console.log(`Ignoring message from unauthorized User ID: ${userId}`); // Optional logging
+	if (!isAuthorized(userId, authorizedUserId)) {
+		// Silently ignore messages from unauthorized users (except /start)
 		return;
 	}
 
-	// 2. Check if it's a text message.
-	// If it's not text (sticker, photo etc.), ignore it.
-	// We no longer check for starting '/' here, as specific command handlers above
-	// deal with *valid* commands. Any message reaching here is either non-command
-	// text or an invalid command format (like '/help extra') which should be treated as text.
+	// 2. Ignore non-text messages
 	if (!msg.text) {
-		return; // Ignore non-text messages
-	}
-
-	// 3. Check if the message *exactly* matches a command handled by onText.
-	// This is a safety check, though theoretically, messages handled by onText
-	// shouldn't reach here due to how the library works. But explicit is better.
-	// We don't need to check for /start here as it's handled above even with args.
-	if (msg.text === '/help' || msg.text === '/prompt_mode' || msg.text === '/commit_mode') {
-		// This message should have been caught by bot.onText.
-		// Log potentially unexpected flow, but don't process as text.
-		const expMessage = `Message "${msg.text}" reached general handler unexpectedly.`;
-		console.warn(expMessage);
-
-		bot.sendMessage(chatId, expMessage);
 		return;
 	}
 
+	// 3. Ignore messages that are exact commands handled by onText
+	// This prevents processing commands like '/help' as text input.
+	// Add new commands here as they are implemented.
+	const commands = ['/start', '/help', '/prompt_mode', '/commit_mode', '/chat_mode', '/list_models'];
+    // Check if the message exactly matches a command or starts with /set_model (which requires an argument)
+	if (commands.includes(msg.text) || msg.text.startsWith('/set_model ')) {
+		// Message is a known command, handled by its specific onText handler. Do nothing here.
+		return;
+	}
 
-	// 4. Process the text message based on the current mode
-	console.log(`Processing text from user ${userId} in ${currentMode} mode: "${msg.text}"`);
-	// Acknowledge receipt and indicate processing
-	const ackMsg = await bot.sendMessage(chatId, `Processing in ${currentMode} mode...`);
+	// 4. Process the text message using the imported API function
+	console.log(`Processing text from user ${userId} in ${currentMode} mode with model ${currentModelId}: "${msg.text}"`);
 
-	const aiResponse = await callDeepSeekAPI(msg.text, currentMode);
+	// Send processing message and store it for editing
+    let ackMsg;
+    try {
+        ackMsg = await bot.sendMessage(chatId, `Processing in ${currentMode} mode with ${currentModelId}...`);
+    } catch (sendError) {
+        console.error("Failed to send acknowledgment message:", sendError.message);
+        // If we can't even send the ack, just proceed without editing later
+    }
+
+
+	const aiResponse = await callDeepSeekAPI(msg.text, currentMode, currentModelId, deepSeekApiEndpoint, deepSeekApiKey);
 
 	// Edit the acknowledgment message with the result or error
 	if (ackMsg && ackMsg.message_id) {
 		bot.editMessageText(aiResponse || "Sorry, an error occurred and no response was generated.", {
 			chat_id: chatId,
 			message_id: ackMsg.message_id,
-			parse_mode: 'Markdown', // Keep formatting consistent if needed
+			// No parse_mode here for plain text
 			disable_web_page_preview: true
 		}).catch(editError => {
-			// If editing fails (e.g., message too old, bot blocked), send a new message
+			// If editing fails (e.g., message too old), send a new message
 			console.error("Failed to edit message:", editError.message);
-			sendMessage(chatId, aiResponse || "Sorry, an error occurred processing your request.");
+			sendMessage(bot, chatId, aiResponse || "Sorry, an error occurred processing your request."); // Use helper
 		});
 	} else {
-		// Fallback if sending the acknowledgment failed for some reason
-		sendMessage(chatId, aiResponse || "Sorry, an error occurred processing your request.");
+		// Fallback if sending/editing the acknowledgment failed
+		sendMessage(bot, chatId, aiResponse || "Sorry, an error occurred processing your request."); // Use helper
 	}
 });
 
 // Optional: Handle polling errors
 bot.on('polling_error', (error) => {
 	console.error(`Polling error: ${error.code} - ${error.message}. Timestamp: ${new Date().toISOString()}`);
-	// Example: Specific handling for network issues or Telegram server problems
 	if (error.message.includes('ETIMEDOUT') || error.message.includes('ECONNRESET')) {
 		console.warn('Network-related polling error. The bot will attempt to continue polling.');
 	} else if (error.code === 'EFATAL') {
 		console.error('Fatal polling error occurred. Stopping the bot.');
-		// Potentially attempt a restart or notify an admin
-		process.exit(1); // Exit on fatal polling errors
+		process.exit(1);
 	}
-	// Add more specific error handling as needed
 });
-
 
 // Graceful shutdown
 const shutdown = (signal) => {
 	console.log(`${signal} received. Shutting down bot...`);
-	bot.stopPolling({ cancel: true }).then(() => { // `cancel: true` can help stop pending requests
+	bot.stopPolling({ cancel: true }).then(() => {
 		console.log("Bot stopped polling gracefully.");
 		process.exit(0);
 	}).catch(err => {
 		console.error("Error stopping polling:", err);
-		process.exit(1); // Exit with error if shutdown fails
+		process.exit(1);
 	});
 };
 
 process.on('SIGINT', () => shutdown('SIGINT')); // Ctrl+C
-process.on('SIGTERM', () => shutdown('SIGTERM')); // Termination signal
+process.on('SIGTERM', () => shutdown('SIGTERM')); // Termination signal 
