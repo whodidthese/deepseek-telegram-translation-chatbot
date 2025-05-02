@@ -3,7 +3,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
 const { isAuthorized, sendMessage } = require('./utils'); // Import helpers
-const { callDeepSeekAPI } = require('./api'); // Import API caller
+// const { callDeepSeekAPI } = require('./api'); // Import API caller
+const { callOpenRouterAPI } = require('./apiv2'); // Import API caller
 
 // --- Configuration ---
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -61,13 +62,6 @@ console.log(`Bot started. Authorized User ID: ${authorizedUserId}`);
 console.log(`Default mode: ${currentMode}`);
 console.log(`Current model ID: ${currentModelId}`);
 console.log(`Current time: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' })} (Taiwan Time)`);
-
-
-// --- Helper Functions (Moved to utils.js and api.js) ---
-// isAuthorized is now imported from utils.js
-// sendMessage is now imported from utils.js
-// callDeepSeekAPI is now imported from api.js
-
 
 // --- Bot Event Handlers ---
 
@@ -217,7 +211,7 @@ bot.on('message', async (msg) => {
     }
 
 
-	const aiResponse = await callDeepSeekAPI(msg.text, currentMode, currentModelId, deepSeekApiEndpoint, deepSeekApiKey);
+	const aiResponse = await callOpenRouterAPI(msg.text, currentMode, currentModelId, deepSeekApiEndpoint, deepSeekApiKey);
 
 	// Edit the acknowledgment message with the result or error
 	if (ackMsg && ackMsg.message_id) {
