@@ -5,6 +5,11 @@
     "notes": "Default & Free"
   },
   {
+    "id": "deepseek/deepseek-r1-0528:free",
+    "name": "DeepSeek R1 0528",
+    "notes": "Free"
+  },
+  {
     "id": "qwen/qwen3-235b-a22b:free",
     "name": "Qwen3 235B A22B",
     "notes": "Free"
